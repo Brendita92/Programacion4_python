@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
  
  
-def custom_exception_handler(exc, context):
+def custom_exception_handler(exc, context): # aca se define la funcion que va a manejar las excepciones
     response = exception_handler(exc, context)
  
     if response is not None:
