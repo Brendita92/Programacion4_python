@@ -50,6 +50,12 @@ from .serializers import ProjectSerializer, TaskSerializer
 
 # Importa el servicio de tareas (capa de negocio)
 from .services import TaskService
+from django.contrib.auth.models import User
+from rest_framework import generics, permissions
+from .serializer_auth import RegisterSerializer
+from rest_framework.permissions import IsAuthenticated
+
+
 
 
 # Endpoint simple para verificar que la API está viva
@@ -81,7 +87,18 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     # Permite buscar tareas por título o descripción (?search=logo, etc.)
     search_fields = ["title", "description"]
+    permission_classes = [IsAuthenticated]  # Solo usuarios autenticados pueden acceder 
 
+
+    def get_queryset(self):
+        # Filtra las tareas para que cada usuario solo vea las suyas
+        return super().get_queryset().filter(owner=self.request.user)
+
+    def perform_create(self, serializer):
+        # Asigna automáticamente el owner al usuario autenticado
+        serializer.save(owner=self.request.user)
+
+        
     # Acción personalizada: marcar una tarea como completada
     @action(detail=True, methods=["post"])
     def complete(self, request, pk=None):
@@ -104,3 +121,8 @@ class TaskViewSet(viewsets.ModelViewSet):
             return self.get_paginated_response(self.get_serializer(page, many=True).data)
         # Si no hay paginación, devuelve todas las tareas vencidas
         return Response(self.get_serializer(tasks, many=True).data)
+
+class RegisterView(generics.CreateAPIView):
+        queryset = User.objects.all()
+        serializer_class = RegisterSerializer
+        permission_classes = [permissions.AllowAny]
