@@ -28,6 +28,8 @@
 #     serializer_class = TaskSerializer
 
 # Importa JsonResponse para devolver respuestas simples en formato JSON
+#from django.db.migrations import serializer
+
 from django.http import JsonResponse
 
 # Importa la clase base para crear ViewSets en DRF
@@ -49,11 +51,15 @@ from .repositories import TaskRepository
 from .serializers import ProjectSerializer, TaskSerializer
 
 # Importa el servicio de tareas (capa de negocio)
-from .services import TaskService
+from .services import TaskService, MembershipService
+from rest_framework.exceptions import PermissionDenied
+from .permissions import IsProjectAdminOrReadOnly
 from django.contrib.auth.models import User
 from rest_framework import generics, permissions
 from .serializer_auth import RegisterSerializer
 from rest_framework.permissions import IsAuthenticated
+from django.db import transaction
+from .models import Project,ProjectMembership
 
 
 
@@ -70,6 +76,27 @@ class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all().order_by("id")
     # Define el serializer que transforma objetos Project <-> JSON
     serializer_class = ProjectSerializer
+    permission_classes = [
+        IsAuthenticated,
+        IsProjectAdminOrReadOnly,
+    ]
+
+    def get_queryset(self):
+        return MembershipService.projects_for(
+            self.request.user
+        )
+
+    def perform_create(self, serializer):
+
+        with transaction.atomic():
+
+            project = serializer.save()
+
+            ProjectMembership.objects.create(
+                project=project,
+                user=self.request.user,
+                role="admin"
+            )
 
 
 # ViewSet para tareas (CRUD completo + acciones personalizadas)
@@ -87,16 +114,38 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     # Permite buscar tareas por título o descripción (?search=logo, etc.)
     search_fields = ["title", "description"]
-    permission_classes = [IsAuthenticated]  # Solo usuarios autenticados pueden acceder 
+    permission_classes = [IsAuthenticated, IsProjectAdminOrReadOnly,]
 
 
     def get_queryset(self):
-        # Filtra las tareas para que cada usuario solo vea las suyas
-        return super().get_queryset().filter(owner=self.request.user)
+        return super().get_queryset().filter(
+            project__memberships__user=self.request.user
+        ).distinct()
+
+    def check_project_admin(self, project):
+        if not MembershipService.is_admin(
+            self.request.user,
+            project
+        ):
+            raise PermissionDenied(
+            "Solo un admin del proyecto puede crear o mover tareas en él." )
 
     def perform_create(self, serializer):
-        # Asigna automáticamente el owner al usuario autenticado
-        serializer.save(owner=self.request.user)
+        self.check_project_admin(
+            serializer.validated_data["project"]
+        )
+
+        serializer.save(
+            owner=self.request.user
+        )
+
+        def perform_update(self, serializer):
+            if "project" in serializer.validated_data:
+                self.check_project_admin(
+                    serializer.validated_data["project"]
+                )
+
+            serializer.save()
 
         
     # Acción personalizada: marcar una tarea como completada
