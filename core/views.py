@@ -60,6 +60,8 @@ from .serializer_auth import RegisterSerializer
 from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
 from .models import Project,ProjectMembership
+from rest_framework.views import APIView
+from rest_framework_simplejwt.tokens import RefreshToken
 
 
 
@@ -118,34 +120,23 @@ class TaskViewSet(viewsets.ModelViewSet):
 
 
     def get_queryset(self):
-        return super().get_queryset().filter(
-            project__memberships__user=self.request.user
-        ).distinct()
+        return super().get_queryset().filter(project__memberships__user=self.request.user).distinct()
 
     def check_project_admin(self, project):
-        if not MembershipService.is_admin(
-            self.request.user,
-            project
-        ):
+        if not MembershipService.is_admin(self.request.user,project):
             raise PermissionDenied(
             "Solo un admin del proyecto puede crear o mover tareas en él." )
 
     def perform_create(self, serializer):
-        self.check_project_admin(
-            serializer.validated_data["project"]
-        )
+        self.check_project_admin(serializer.validated_data["project"])
 
-        serializer.save(
-            owner=self.request.user
-        )
+        serializer.save(owner=self.request.user)
 
-        def perform_update(self, serializer):
-            if "project" in serializer.validated_data:
-                self.check_project_admin(
-                    serializer.validated_data["project"]
-                )
+    def perform_update(self, serializer):
+        if "project" in serializer.validated_data:
+            self.check_project_admin(serializer.validated_data["project"]               )
 
-            serializer.save()
+        serializer.save()
 
         
     # Acción personalizada: marcar una tarea como completada
@@ -175,3 +166,14 @@ class RegisterView(generics.CreateAPIView):
         queryset = User.objects.all()
         serializer_class = RegisterSerializer
         permission_classes = [permissions.AllowAny]
+
+class SocialLoginJWTView(APIView):
+    """
+    Después de loguearse con Google, allauth deja al usuario con una sesión
+    de Django. Esta vista toma ese usuario y le entrega un par de JWT propios,
+    los mismos que devuelve /api/token/ (Clase 6).
+    """
+ 
+    def get(self, request):
+        refresh = RefreshToken.for_user(request.user)
+        return Response({"refresh": str(refresh), "access": str(refresh.access_token)})
