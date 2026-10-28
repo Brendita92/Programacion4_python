@@ -37,6 +37,7 @@ ALLOWED_HOSTS = os.getenv(
 # Application definition
 
 INSTALLED_APPS = [
+    "daphne",
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -170,6 +171,7 @@ SIMPLE_JWT = {
 }
 
 INSTALLED_APPS += [
+    "channels",
     "corsheaders",
     "django.contrib.sites",
     "allauth",
@@ -221,5 +223,14 @@ LOGGING = {
             "handlers": ["file"],
             "level": "WARNING",
         },
+    },
+}
+
+
+ASGI_APPLICATION = "config.asgi.application"
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
     },
 }
