@@ -2,6 +2,7 @@ from datetime import date
 from .models import Project, Task, Tag
 from rest_framework import serializers
 from .services import HolidayService
+import nh3
 
 
 # Cómo se van a serializar los datos de los modelos a JSON y viceversa.
@@ -28,6 +29,8 @@ class TaskSerializer(serializers.ModelSerializer):
         return HolidayService.is_holiday(obj.due_date)
 
     # validate_due_date y validate de la Clase 4 se mantienen igual
+    def validate_description(self, value):
+        return nh3.clean(value, tags=set())
 
 
 class ProjectSerializer(serializers.ModelSerializer):

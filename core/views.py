@@ -62,6 +62,14 @@ from django.db import transaction
 from .models import Project,ProjectMembership
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+import logging
+ 
+from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
+from rest_framework_simplejwt.views import TokenObtainPairView
+ 
+from .models import Project, ProjectMembership, SecurityLog
+from .throttles import LoginRateThrottle
+
 
 
 
@@ -177,3 +185,19 @@ class SocialLoginJWTView(APIView):
     def get(self, request):
         refresh = RefreshToken.for_user(request.user)
         return Response({"refresh": str(refresh), "access": str(refresh.access_token)})
+
+security_logger = logging.getLogger("security")
+ 
+ 
+class ThrottledTokenObtainPairView(TokenObtainPairView):
+    throttle_classes = [LoginRateThrottle]
+ 
+    def post(self, request, *args, **kwargs):
+        try:
+            return super().post(request, *args, **kwargs)
+        except AuthenticationFailed:
+            ip = request.META.get("REMOTE_ADDR")
+            username = request.data.get("username", "")
+            SecurityLog.objects.create(action="login_failed", detail=f"usuario={username}", ip_address=ip)
+            security_logger.warning(f"Login fallido para usuario {username} desde {ip}")
+            raise
